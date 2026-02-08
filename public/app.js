@@ -5,7 +5,8 @@
 // State
 let rows = [];
 let headers = [];
-let isSending = false;
+let currentJobId = null;
+let eventSource = null;
 
 // DOM Elements
 const csvInput = document.getElementById("csv");
@@ -27,7 +28,6 @@ const steps = document.querySelectorAll(".step");
 // Initialization
 // ========================================
 document.addEventListener("DOMContentLoaded", async () => {
-  // Test connection on load
   await testConnection();
 });
 
@@ -123,7 +123,7 @@ function handleFileUpload(file) {
       renderMapping();
       setActiveStep(2);
       setStatus("Map your columns below 👇", "");
-      sendBtn.disabled = false;
+      updateSendButton("ready");
 
       showToast(`${rows.length} rows loaded`, "success");
     },
@@ -147,9 +147,7 @@ function renderMapping() {
     ).join("");
   });
 
-  // Try to auto-map based on common column names
   autoMapColumns();
-
   mappingDiv.classList.remove("hidden");
 }
 
@@ -177,23 +175,45 @@ function autoMapColumns() {
 }
 
 // ========================================
-// Send Messages
+// Send Button States
 // ========================================
-sendBtn.addEventListener("click", sendMessages);
+function updateSendButton(state) {
+  switch (state) {
+    case "ready":
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = '<span class="btn-icon">📨</span><span>Send to Telegram</span>';
+      sendBtn.onclick = startSendJob;
+      break;
+    case "sending":
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = '<span class="btn-icon">⏹️</span><span>Stop Sending</span>';
+      sendBtn.onclick = stopSendJob;
+      sendBtn.classList.add("stop-btn");
+      break;
+    case "stopping":
+      sendBtn.disabled = true;
+      sendBtn.innerHTML = '<span class="loading-spinner">⏳</span><span>Stopping...</span>';
+      break;
+    case "disabled":
+      sendBtn.disabled = true;
+      sendBtn.innerHTML = '<span class="btn-icon">📨</span><span>Send to Telegram</span>';
+      break;
+  }
+}
 
-async function sendMessages() {
-  if (isSending) return;
-
-  isSending = true;
-  sendBtn.disabled = true;
-  sendBtn.innerHTML = '<span class="loading-spinner">⏳</span> Sending...';
+// ========================================
+// Start Send Job
+// ========================================
+async function startSendJob() {
+  if (currentJobId) return;
 
   setActiveStep(3);
-  setStatus("Connecting to Telegram...", "loading");
+  setStatus("Starting job...", "loading");
+  updateSendButton("sending");
 
   // Show progress
   progressSection.classList.add("visible");
-  updateProgress(0, rows.length);
+  updateProgress(0, rows.length, 0, 0);
 
   const mapping = {
     title: document.getElementById("title").value,
@@ -204,8 +224,7 @@ async function sendMessages() {
   };
 
   try {
-    setStatus(`Sending ${rows.length} messages...`, "loading");
-
+    // Start the job
     const res = await fetch("/api/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -213,48 +232,114 @@ async function sendMessages() {
     });
 
     if (!res.ok) {
-      const errorText = await res.text();
-      try {
-        const error = JSON.parse(errorText);
-        throw new Error(error.error || "Server error");
-      } catch {
-        throw new Error(`HTTP ${res.status}: ${errorText}`);
-      }
+      const error = await res.json();
+      throw new Error(error.error || "Failed to start job");
     }
 
-    const result = await res.json();
+    const data = await res.json();
+    currentJobId = data.jobId;
 
-    updateProgress(result.sent, result.total);
+    // Subscribe to SSE updates
+    subscribeToEvents(currentJobId);
 
-    if (result.success) {
-      setStatus(`✅ All ${result.sent} messages sent!`, "success");
-      showToast(`Sent ${result.sent} messages!`, "success");
-    } else {
-      setStatus(`⚠️ ${result.sent}/${result.total} sent, ${result.failed} failed`, "error");
-      showToast(`${result.failed} messages failed`, "error");
-
-      // Log errors
-      if (result.errors && result.errors.length > 0) {
-        console.group("Failed messages:");
-        result.errors.forEach(e => console.log(`Row ${e.row}: ${e.error}`));
-        console.groupEnd();
-      }
-    }
   } catch (error) {
     setStatus(`❌ ${error.message}`, "error");
-    showToast("Failed to send", "error");
-    console.error("Send error:", error);
-  } finally {
-    isSending = false;
-    sendBtn.disabled = false;
-    sendBtn.innerHTML = '<span class="btn-icon">📨</span><span>Send to Telegram</span>';
+    showToast("Failed to start job", "error");
+    updateSendButton("ready");
+    console.error("Start job error:", error);
   }
+}
+
+// ========================================
+// Stop Send Job
+// ========================================
+async function stopSendJob() {
+  if (!currentJobId) return;
+
+  updateSendButton("stopping");
+
+  try {
+    await fetch(`/api/stop/${currentJobId}`, { method: "POST" });
+  } catch (error) {
+    console.error("Stop error:", error);
+  }
+}
+
+// ========================================
+// SSE Event Stream
+// ========================================
+function subscribeToEvents(jobId) {
+  if (eventSource) {
+    eventSource.close();
+  }
+
+  eventSource = new EventSource(`/api/events/${jobId}`);
+
+  eventSource.addEventListener("connected", (e) => {
+    const data = JSON.parse(e.data);
+    console.log("Connected to job:", data.jobId);
+    setStatus("Connected. Sending messages...", "loading");
+  });
+
+  eventSource.addEventListener("progress", (e) => {
+    const data = JSON.parse(e.data);
+    updateProgress(data.current, data.total, data.sent, data.failed);
+    setStatus(`Sending: ${data.current}/${data.total} (${data.percent}%)`, "loading");
+  });
+
+  eventSource.addEventListener("log", (e) => {
+    const data = JSON.parse(e.data);
+    console.log(`[${data.time}] ${data.message}`);
+  });
+
+  eventSource.addEventListener("ratelimit", (e) => {
+    const data = JSON.parse(e.data);
+    setStatus(`⏳ Rate limited. Waiting ${data.retryAfter}s...`, "loading");
+    showToast(`Rate limited. Waiting ${data.retryAfter}s...`, "error");
+  });
+
+  eventSource.addEventListener("done", (e) => {
+    const data = JSON.parse(e.data);
+
+    eventSource.close();
+    eventSource = null;
+    currentJobId = null;
+
+    if (data.failed === 0) {
+      setStatus(`✅ All ${data.sent} messages sent!`, "success");
+      showToast(`Sent ${data.sent} messages!`, "success");
+    } else {
+      setStatus(`⚠️ ${data.sent}/${data.total} sent, ${data.failed} failed`, "error");
+      showToast(`${data.failed} messages failed`, "error");
+    }
+
+    updateSendButton("ready");
+  });
+
+  eventSource.addEventListener("stopped", (e) => {
+    eventSource.close();
+    eventSource = null;
+    currentJobId = null;
+
+    setStatus("🛑 Job stopped", "error");
+    showToast("Job stopped", "error");
+    updateSendButton("ready");
+  });
+
+  eventSource.onerror = (e) => {
+    console.error("SSE error:", e);
+    if (eventSource.readyState === EventSource.CLOSED) {
+      eventSource = null;
+      currentJobId = null;
+      updateSendButton("ready");
+    }
+  };
 }
 
 // ========================================
 // Progress Tracking
 // ========================================
-function updateProgress(current, total) {
+function updateProgress(current, total, sent, failed) {
   const percent = total > 0 ? Math.round((current / total) * 100) : 0;
 
   progressBar.style.width = `${percent}%`;
