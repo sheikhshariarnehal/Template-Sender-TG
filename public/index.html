@@ -3,31 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CSV → Telegram Sender</title>
+  <title>CSV → Telegram</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-  <div class="container">
+<div class="container">
+  <div class="card">
     <h1>CSV → Telegram</h1>
     <p class="subtitle">Upload CSV & map columns</p>
 
-    <div class="card">
-      <label class="file-label">
-        Upload CSV
-        <input type="file" id="csv" accept=".csv" />
-      </label>
+    <input type="file" id="csv" accept=".csv" />
 
-      <div id="mapping" class="mapping hidden"></div>
+    <div id="mapping" class="mapping hidden"></div>
 
-      <button id="sendBtn" class="send-btn" disabled>
-        Send to Telegram
-      </button>
-
-      <p id="status" class="status"></p>
-    </div>
+    <button id="sendBtn" disabled>Send to Telegram</button>
+    <p id="status"></p>
   </div>
+</div>
 
-  <script src="app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
