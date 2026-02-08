@@ -215,7 +215,7 @@ ${row[mapping.description] || ""}
 
       // Base delay between messages (safe for Telegram)
       if (success && i < rows.length - 1) {
-        await this.sleep(1500); // 1.5s delay between messages
+        await this.sleep(3500); // 3.5s delay to prevent rate limits
       }
     }
 
@@ -263,6 +263,16 @@ app.get("/api/health", (req, res) => {
     bot_configured: !!BOT_TOKEN,
     channel_configured: !!CHANNEL_ID,
     active_jobs: jobManager.jobs.size
+  });
+});
+
+// Get public config
+app.get("/api/config", (req, res) => {
+  res.json({
+    insforgeUrl: process.env.INSFORGE_URL,
+    insforgeAnonKey: process.env.INSFORGE_ANON_KEY,
+    defaultBotToken: process.env.BOT_TOKEN,
+    defaultChannelId: process.env.CHANNEL_ID
   });
 });
 

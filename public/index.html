@@ -1,137 +1,260 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Upload CSV files and send formatted messages to Telegram channels with ease" />
   <meta name="theme-color" content="#6366f1" />
-  
+
   <title>CSV → Telegram Sender</title>
-  
+
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  
+
   <link rel="stylesheet" href="style.css" />
+  <style>
+    .credentials {
+      margin-top: 1.5rem;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .credentials-header {
+      padding: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .credentials-header:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .credentials-header h3 {
+      font-size: 0.9rem;
+      margin: 0;
+      color: rgba(255, 255, 255, 0.8);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .toggle-icon {
+      color: rgba(255, 255, 255, 0.5);
+      transition: transform 0.3s ease;
+    }
+
+    .credentials.open .toggle-icon {
+      transform: rotate(180deg);
+    }
+
+    .credentials-content {
+      padding: 1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      transition: max-height 0.3s ease, padding 0.3s ease;
+      max-height: 500px;
+      /* Arbitrary large height */
+    }
+
+    .credentials-content.collapsed {
+      max-height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      border-top: none;
+      overflow: hidden;
+    }
+
+    .credentials-hint {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.5);
+      margin-top: 0.5rem;
+      font-style: italic;
+    }
+
+    .input-group {
+      margin-bottom: 1rem;
+    }
+
+    .input-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 0.85rem;
+      margin-bottom: 0.5rem;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 0.75rem;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: white;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .input-group input:focus {
+      border-color: #6366f1;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
 </head>
+
 <body>
 
-<div class="container">
-  <!-- Header -->
-  <header class="header">
-    <div class="logo">
-      <div class="logo-icon">📨</div>
-      <span class="logo-text">Template Sender</span>
-    </div>
-    <p class="tagline">Upload CSV & send to Telegram in seconds</p>
-  </header>
-
-  <!-- Main Card -->
-  <div class="card">
-    <!-- Step Indicator -->
-    <div class="steps">
-      <div class="step active" data-step="1">
-        <div class="step-number">1</div>
-        <span class="step-label">Upload</span>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <div class="logo-icon">📨</div>
+        <span class="logo-text">Template Sender</span>
       </div>
-      <div class="step" data-step="2">
-        <div class="step-number">2</div>
-        <span class="step-label">Map</span>
-      </div>
-      <div class="step" data-step="3">
-        <div class="step-number">3</div>
-        <span class="step-label">Send</span>
-      </div>
-    </div>
+      <p class="tagline">Upload CSV & send to Telegram in seconds</p>
+    </header>
 
-    <!-- Upload Zone -->
-    <div class="upload-zone" id="uploadZone">
-      <span class="upload-icon">📁</span>
-      <p class="upload-text">Drop your CSV file here</p>
-      <p class="upload-hint">or click to browse</p>
-      <input type="file" id="csv" accept=".csv" />
-    </div>
-
-    <!-- File Info -->
-    <div class="file-info" id="fileInfo">
-      <span class="file-icon">📄</span>
-      <div class="file-details">
-        <div class="file-name" id="fileName">file.csv</div>
-        <div class="file-meta" id="fileMeta">0 rows loaded</div>
-      </div>
-    </div>
-
-    <!-- Mapping Section -->
-    <div id="mapping" class="mapping hidden">
-      <div class="mapping-grid">
-        <div class="mapping-item">
-          <label class="mapping-label">
-            <span class="icon">📝</span> Title
-          </label>
-          <select id="title"></select>
+    <!-- Main Card -->
+    <div class="card">
+      <!-- Step Indicator -->
+      <div class="steps">
+        <div class="step active" data-step="1">
+          <div class="step-number">1</div>
+          <span class="step-label">Upload</span>
         </div>
-        <div class="mapping-item">
-          <label class="mapping-label">
-            <span class="icon">📋</span> Description
-          </label>
-          <select id="description"></select>
+        <div class="step" data-step="2">
+          <div class="step-number">2</div>
+          <span class="step-label">Map</span>
         </div>
-        <div class="mapping-item">
-          <label class="mapping-label">
-            <span class="icon">⬇️</span> Download Link
-          </label>
-          <select id="download"></select>
-        </div>
-        <div class="mapping-item">
-          <label class="mapping-label">
-            <span class="icon">🔗</span> View Link
-          </label>
-          <select id="view"></select>
-        </div>
-        <div class="mapping-item" style="grid-column: 1 / -1;">
-          <label class="mapping-label">
-            <span class="icon">🖼️</span> Image URL
-          </label>
-          <select id="image"></select>
+        <div class="step" data-step="3">
+          <div class="step-number">3</div>
+          <span class="step-label">Send</span>
         </div>
       </div>
+
+      <!-- Upload Zone -->
+      <div class="upload-zone" id="uploadZone">
+        <span class="upload-icon">📁</span>
+        <p class="upload-text">Drop your CSV file here</p>
+        <p class="upload-hint">or click to browse</p>
+        <input type="file" id="csv" accept=".csv" />
+      </div>
+
+      <!-- File Info -->
+      <div class="file-info" id="fileInfo">
+        <span class="file-icon">📄</span>
+        <div class="file-details">
+          <div class="file-name" id="fileName">file.csv</div>
+          <div class="file-meta" id="fileMeta">0 rows loaded</div>
+        </div>
+      </div>
+
+      <!-- Credentials Section -->
+      <!-- Credentials Section -->
+      <div id="credentials" class="credentials hidden">
+        <div class="credentials-header" onclick="toggleCredentials()">
+          <h3>🔑 Telegram Credentials</h3>
+          <span class="toggle-icon">▼</span>
+        </div>
+        <div class="credentials-content collapsed" id="credentialsContent">
+          <div class="input-group">
+            <label>Bot Token</label>
+            <input type="text" id="botToken" placeholder="Enter Bot Token to override default" />
+          </div>
+          <div class="input-group">
+            <label>Channel ID</label>
+            <input type="text" id="channelId" placeholder="Enter Channel ID to override default" />
+          </div>
+          <p class="credentials-hint">
+            <span id="envStatus">Checking environment configuration...</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Mapping Section -->
+      <div id="mapping" class="mapping hidden">
+        <div class="mapping-grid">
+          <div class="mapping-item">
+            <label class="mapping-label">
+              <span class="icon">📝</span> Title
+            </label>
+            <select id="title"></select>
+          </div>
+          <div class="mapping-item">
+            <label class="mapping-label">
+              <span class="icon">📋</span> Description
+            </label>
+            <select id="description"></select>
+          </div>
+          <div class="mapping-item">
+            <label class="mapping-label">
+              <span class="icon">⬇️</span> Download Link
+            </label>
+            <select id="download"></select>
+          </div>
+          <div class="mapping-item">
+            <label class="mapping-label">
+              <span class="icon">🔗</span> View Link
+            </label>
+            <select id="view"></select>
+          </div>
+          <div class="mapping-item" style="grid-column: 1 / -1;">
+            <label class="mapping-label">
+              <span class="icon">🖼️</span> Image URL
+            </label>
+            <select id="image"></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress Section -->
+      <div class="progress-section" id="progressSection">
+        <div class="progress-bar-container">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div class="progress-text">
+          <span id="progressCount">0 / 0</span>
+          <span id="progressPercent">0%</span>
+        </div>
+      </div>
+
+      <!-- Send Button -->
+      <button id="sendBtn" class="btn" disabled>
+        <span class="btn-icon">📨</span>
+        <span>Send to Telegram</span>
+      </button>
+
+      <!-- Status -->
+      <p id="status" class="status"></p>
     </div>
 
-    <!-- Progress Section -->
-    <div class="progress-section" id="progressSection">
-      <div class="progress-bar-container">
-        <div class="progress-bar" id="progressBar"></div>
-      </div>
-      <div class="progress-text">
-        <span id="progressCount">0 / 0</span>
-        <span id="progressPercent">0%</span>
-      </div>
-    </div>
-
-    <!-- Send Button -->
-    <button id="sendBtn" class="btn" disabled>
-      <span class="btn-icon">📨</span>
-      <span>Send to Telegram</span>
-    </button>
-
-    <!-- Status -->
-    <p id="status" class="status"></p>
+    <!-- Footer -->
+    <footer class="footer">
+      Made with ❤️ for Telegram automation
+    </footer>
   </div>
 
-  <!-- Footer -->
-  <footer class="footer">
-    Made with ❤️ for Telegram automation
-  </footer>
-</div>
+  <!-- Toast for notifications -->
+  <div class="toast" id="toast">
+    <span class="toast-icon"></span>
+    <span class="toast-message"></span>
+  </div>
 
-<!-- Toast for notifications -->
-<div class="toast" id="toast">
-  <span class="toast-icon"></span>
-  <span class="toast-message"></span>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-<script src="app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
+
 </html>

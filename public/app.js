@@ -1,12 +1,19 @@
 // ========================================
-// Template-Sender-TG - Application Logic
+// Template-Sender-TG - Application Logic (Cloud Version)
 // ========================================
 
+import { createClient } from 'https://esm.sh/@insforge/sdk@latest';
+
+const params = new URLSearchParams(window.location.search);
+const offlineMode = params.get("offline") === "true"; // Allow forcing offline mode for testing
+
 // State
+let client = null;
 let rows = [];
 let headers = [];
 let currentJobId = null;
-let eventSource = null;
+let pollInterval = null;
+let defaultCredentials = { botToken: "", channelId: "" };
 
 // DOM Elements
 const csvInput = document.getElementById("csv");
@@ -23,28 +30,89 @@ const progressCount = document.getElementById("progressCount");
 const progressPercent = document.getElementById("progressPercent");
 const toast = document.getElementById("toast");
 const steps = document.querySelectorAll(".step");
+const envStatus = document.getElementById("envStatus");
+
+// Expose toggle function to global scope for HTML click handler
+window.toggleCredentials = function () {
+  const content = document.getElementById("credentialsContent");
+  const wrapper = document.getElementById("credentials");
+  content.classList.toggle("collapsed");
+  wrapper.classList.toggle("open");
+};
 
 // ========================================
 // Initialization
 // ========================================
 document.addEventListener("DOMContentLoaded", async () => {
-  await testConnection();
-});
-
-async function testConnection() {
   try {
-    const res = await fetch("/api/health");
-    const data = await res.json();
+    // Fetch configuration
+    const configRes = await fetch("/api/config");
+    const config = await configRes.json();
 
-    if (data.bot_configured && data.channel_configured) {
-      console.log("✓ Bot and channel configured");
-    } else {
-      showToast("⚠️ Check .env configuration", "error");
+    if (!config.insforgeUrl || !config.insforgeAnonKey) {
+      console.error("Missing InsForge configuration");
+      showToast("❌ Missing server configuration", "error");
+      return;
     }
+
+    // Initialize Client
+    client = createClient({
+      baseUrl: config.insforgeUrl,
+      anonKey: config.insforgeAnonKey
+    });
+    console.log("Client initialized:", client);
+    console.log("Client type:", typeof client);
+    console.log("Client keys:", Object.keys(client));
+
+    // Store defaults found in config
+    if (config.defaultBotToken) defaultCredentials.botToken = config.defaultBotToken;
+    if (config.defaultChannelId) defaultCredentials.channelId = config.defaultChannelId;
+
+    // Update UI based on defaults
+    if (defaultCredentials.botToken && defaultCredentials.channelId) {
+      envStatus.textContent = "✅ Using default credentials from environment";
+      envStatus.style.color = "#4ade80"; // Green
+    } else if (defaultCredentials.botToken || defaultCredentials.channelId) {
+      envStatus.textContent = "⚠️ Partial credentials found in environment";
+      envStatus.style.color = "#facc15"; // Yellow
+    } else {
+      envStatus.textContent = "❌ No default credentials found";
+      envStatus.style.color = "#f87171"; // Red
+      // Open credentials by default if missing
+      toggleCredentials();
+    }
+
   } catch (err) {
-    console.log("Server not reachable:", err.message);
+    console.error("Failed to load config:", err);
+    showToast("❌ Failed to load configuration", "error");
+    return;
   }
-}
+
+  // Check if we have stored credentials (overrides)
+  const storedBotToken = localStorage.getItem("bot_token");
+  const storedChannelId = localStorage.getItem("channel_id");
+
+  if (storedBotToken) document.getElementById("botToken").value = storedBotToken;
+  if (storedChannelId) document.getElementById("channelId").value = storedChannelId;
+
+  // Check for active job
+  const persistedJobId = localStorage.getItem("current_job_id");
+  if (persistedJobId && client) {
+    console.log("Found persisted job:", persistedJobId);
+    // Check if it's still relevant
+    const { data: job } = await client.database.from('jobs').select('status').eq('id', persistedJobId).single();
+
+    if (job && (job.status === 'pending' || job.status === 'running')) {
+      currentJobId = persistedJobId;
+      setActiveStep(3);
+      progressSection.classList.add("visible");
+      updateSendButton("sending");
+      pollJobStatus();
+    } else {
+      localStorage.removeItem("current_job_id");
+    }
+  }
+});
 
 // ========================================
 // Step Management
@@ -122,7 +190,7 @@ function handleFileUpload(file) {
       // Render mapping
       renderMapping();
       setActiveStep(2);
-      setStatus("Map your columns below 👇", "");
+      setStatus("Map your columns & enter credentials 👇", "");
       updateSendButton("ready");
 
       showToast(`${rows.length} rows loaded`, "success");
@@ -149,6 +217,9 @@ function renderMapping() {
 
   autoMapColumns();
   mappingDiv.classList.remove("hidden");
+
+  // Show credential inputs if hidden
+  document.getElementById("credentials").classList.remove("hidden");
 }
 
 function autoMapColumns() {
@@ -181,7 +252,7 @@ function updateSendButton(state) {
   switch (state) {
     case "ready":
       sendBtn.disabled = false;
-      sendBtn.innerHTML = '<span class="btn-icon">📨</span><span>Send to Telegram</span>';
+      sendBtn.innerHTML = '<span class="btn-icon">📨</span><span>Send to Telegram (Cloud)</span>';
       sendBtn.onclick = startSendJob;
       break;
     case "sending":
@@ -202,13 +273,42 @@ function updateSendButton(state) {
 }
 
 // ========================================
-// Start Send Job
+// Start Send Job (Cloud)
 // ========================================
 async function startSendJob() {
   if (currentJobId) return;
 
+  const botTokenInput = document.getElementById("botToken").value;
+  const channelIdInput = document.getElementById("channelId").value;
+
+  // Use input or fallback to defaults
+  const botToken = botTokenInput || defaultCredentials.botToken;
+  const channelId = channelIdInput || defaultCredentials.channelId;
+
+  if (!botToken || !channelId) {
+    showToast("Please enter Bot Token and Channel ID (or configure in .env)", "error");
+    // Open the accordion so they can see input is needed
+    const content = document.getElementById("credentialsContent");
+    const wrapper = document.getElementById("credentials");
+    if (content.classList.contains("collapsed")) {
+      content.classList.remove("collapsed");
+      wrapper.classList.add("open");
+    }
+    return;
+  }
+
+  // Save credentials for next time (only if user entered them)
+  if (botTokenInput) localStorage.setItem("bot_token", botTokenInput);
+  if (channelIdInput) localStorage.setItem("channel_id", channelIdInput);
+
+  if (!client || !client.database) {
+    console.error("Client invalid:", client);
+    showToast("System Error: Database client not ready. See console.", "error");
+    return;
+  }
+
   setActiveStep(3);
-  setStatus("Starting job...", "loading");
+  setStatus("Uploading job to cloud...", "loading");
   updateSendButton("sending");
 
   // Show progress
@@ -224,23 +324,54 @@ async function startSendJob() {
   };
 
   try {
-    // Start the job
-    const res = await fetch("/api/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows, mapping })
-    });
+    // 1. Create Job in Database
+    const { data: job, error: jobError } = await client.database
+      .from('jobs')
+      .insert([{
+        total: rows.length,
+        status: 'pending',
+        mapping: mapping,
+        bot_token: botToken,
+        channel_id: channelId
+      }])
+      .select()
+      .single();
 
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.error || "Failed to start job");
+    if (jobError) throw new Error("Failed to create job: " + jobError.message);
+
+    currentJobId = job.id;
+    console.log("Job created:", currentJobId);
+
+    // 2. Upload Rows (in batches)
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = rows.slice(i, i + BATCH_SIZE).map((row, index) => ({
+        job_id: currentJobId,
+        row_index: i + index,
+        data: row,
+        status: 'pending'
+      }));
+
+      const { error: rowsError } = await client.database.from('job_rows').insert(batch);
+      if (rowsError) throw new Error("Failed to upload rows: " + rowsError.message);
+
+      setStatus(`Uploaded ${Math.min(i + BATCH_SIZE, rows.length)}/${rows.length} rows...`, "loading");
     }
 
-    const data = await res.json();
-    currentJobId = data.jobId;
+    // 3. Trigger Cloud Processing
+    const { error: invokeError } = await client.functions.invoke('process-job', {
+      body: { jobId: currentJobId }
+    });
 
-    // Subscribe to SSE updates
-    subscribeToEvents(currentJobId);
+    if (invokeError) {
+      console.warn("Auto-start failed, but job is saved:", invokeError);
+      showToast("Job saved but auto-start failed. It may run later.", "warning");
+    } else {
+      showToast("Cloud job started! You can close this tab.", "success");
+    }
+
+    // 4. Start Polling for Updates
+    pollJobStatus();
 
   } catch (error) {
     setStatus(`❌ ${error.message}`, "error");
@@ -259,81 +390,60 @@ async function stopSendJob() {
   updateSendButton("stopping");
 
   try {
-    await fetch(`/api/stop/${currentJobId}`, { method: "POST" });
+    const { error } = await client.database
+      .from('jobs')
+      .update({ status: 'stopped' })
+      .eq('id', currentJobId);
+
+    if (error) throw error;
+
+    showToast("Job stopped", "success");
   } catch (error) {
     console.error("Stop error:", error);
+    showToast("Failed to stop job", "error");
   }
 }
 
 // ========================================
-// SSE Event Stream
+// Job Polling
 // ========================================
-function subscribeToEvents(jobId) {
-  if (eventSource) {
-    eventSource.close();
-  }
+function pollJobStatus() {
+  if (pollInterval) clearInterval(pollInterval);
 
-  eventSource = new EventSource(`/api/events/${jobId}`);
-
-  eventSource.addEventListener("connected", (e) => {
-    const data = JSON.parse(e.data);
-    console.log("Connected to job:", data.jobId);
-    setStatus("Connected. Sending messages...", "loading");
-  });
-
-  eventSource.addEventListener("progress", (e) => {
-    const data = JSON.parse(e.data);
-    updateProgress(data.current, data.total, data.sent, data.failed);
-    setStatus(`Sending: ${data.current}/${data.total} (${data.percent}%)`, "loading");
-  });
-
-  eventSource.addEventListener("log", (e) => {
-    const data = JSON.parse(e.data);
-    console.log(`[${data.time}] ${data.message}`);
-  });
-
-  eventSource.addEventListener("ratelimit", (e) => {
-    const data = JSON.parse(e.data);
-    setStatus(`⏳ Rate limited. Waiting ${data.retryAfter}s...`, "loading");
-    showToast(`Rate limited. Waiting ${data.retryAfter}s...`, "error");
-  });
-
-  eventSource.addEventListener("done", (e) => {
-    const data = JSON.parse(e.data);
-
-    eventSource.close();
-    eventSource = null;
-    currentJobId = null;
-
-    if (data.failed === 0) {
-      setStatus(`✅ All ${data.sent} messages sent!`, "success");
-      showToast(`Sent ${data.sent} messages!`, "success");
-    } else {
-      setStatus(`⚠️ ${data.sent}/${data.total} sent, ${data.failed} failed`, "error");
-      showToast(`${data.failed} messages failed`, "error");
+  pollInterval = setInterval(async () => {
+    if (!currentJobId) {
+      clearInterval(pollInterval);
+      return;
     }
 
-    updateSendButton("ready");
-  });
+    const { data: job, error } = await client.database
+      .from('jobs')
+      .select('status, sent, failed, total, current')
+      .eq('id', currentJobId)
+      .single();
 
-  eventSource.addEventListener("stopped", (e) => {
-    eventSource.close();
-    eventSource = null;
-    currentJobId = null;
+    if (error || !job) {
+      console.error("Poll error:", error);
+      return;
+    }
 
-    setStatus("🛑 Job stopped", "error");
-    showToast("Job stopped", "error");
-    updateSendButton("ready");
-  });
+    updateProgress(job.current, job.total, job.sent, job.failed);
+    setStatus(`Cloud Processing: ${job.sent}/${job.total} sent (${Math.round((job.sent / job.total) * 100)}%)`, "loading");
 
-  eventSource.onerror = (e) => {
-    console.error("SSE error:", e);
-    if (eventSource.readyState === EventSource.CLOSED) {
-      eventSource = null;
+    if (job.status === 'completed' || job.status === 'stopped' || job.status === 'failed') {
+      clearInterval(pollInterval);
+      pollInterval = null;
       currentJobId = null;
+
+      if (job.status === 'completed') {
+        setStatus(`✅ Cloud job completed! ${job.sent} sent.`, "success");
+        showToast("Job completed!", "success");
+      } else {
+        setStatus(`🛑 Job ${job.status}`, "error");
+      }
       updateSendButton("ready");
     }
-  };
+  }, 2000); // Poll every 2 seconds
 }
 
 // ========================================
@@ -343,7 +453,7 @@ function updateProgress(current, total, sent, failed) {
   const percent = total > 0 ? Math.round((current / total) * 100) : 0;
 
   progressBar.style.width = `${percent}%`;
-  progressCount.textContent = `${current} / ${total}`;
+  progressCount.textContent = `${sent} / ${total}`; // Show sent count instead of current processed
   progressPercent.textContent = `${percent}%`;
 }
 
