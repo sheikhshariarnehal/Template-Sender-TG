@@ -1,6 +1,17 @@
 {
+  "name": "template-sender-tg",
+  "version": "1.0.0",
   "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
   "dependencies": {
-    "node-fetch": "^3.3.2"
+    "csv-parser": "^3.0.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "node-fetch": "^3.3.2",
+    "node-telegram-bot-api": "^0.64.0"
   }
 }

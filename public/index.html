@@ -3,23 +3,132 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CSV → Telegram</title>
+  <meta name="description" content="Upload CSV files and send formatted messages to Telegram channels with ease" />
+  <meta name="theme-color" content="#6366f1" />
+  
+  <title>CSV → Telegram Sender</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
 <div class="container">
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">
+      <div class="logo-icon">📨</div>
+      <span class="logo-text">Template Sender</span>
+    </div>
+    <p class="tagline">Upload CSV & send to Telegram in seconds</p>
+  </header>
+
+  <!-- Main Card -->
   <div class="card">
-    <h1>CSV → Telegram</h1>
-    <p class="subtitle">Upload CSV & map columns</p>
+    <!-- Step Indicator -->
+    <div class="steps">
+      <div class="step active" data-step="1">
+        <div class="step-number">1</div>
+        <span class="step-label">Upload</span>
+      </div>
+      <div class="step" data-step="2">
+        <div class="step-number">2</div>
+        <span class="step-label">Map</span>
+      </div>
+      <div class="step" data-step="3">
+        <div class="step-number">3</div>
+        <span class="step-label">Send</span>
+      </div>
+    </div>
 
-    <input type="file" id="csv" accept=".csv" />
+    <!-- Upload Zone -->
+    <div class="upload-zone" id="uploadZone">
+      <span class="upload-icon">📁</span>
+      <p class="upload-text">Drop your CSV file here</p>
+      <p class="upload-hint">or click to browse</p>
+      <input type="file" id="csv" accept=".csv" />
+    </div>
 
-    <div id="mapping" class="mapping hidden"></div>
+    <!-- File Info -->
+    <div class="file-info" id="fileInfo">
+      <span class="file-icon">📄</span>
+      <div class="file-details">
+        <div class="file-name" id="fileName">file.csv</div>
+        <div class="file-meta" id="fileMeta">0 rows loaded</div>
+      </div>
+    </div>
 
-    <button id="sendBtn" disabled>Send to Telegram</button>
-    <p id="status"></p>
+    <!-- Mapping Section -->
+    <div id="mapping" class="mapping hidden">
+      <div class="mapping-grid">
+        <div class="mapping-item">
+          <label class="mapping-label">
+            <span class="icon">📝</span> Title
+          </label>
+          <select id="title"></select>
+        </div>
+        <div class="mapping-item">
+          <label class="mapping-label">
+            <span class="icon">📋</span> Description
+          </label>
+          <select id="description"></select>
+        </div>
+        <div class="mapping-item">
+          <label class="mapping-label">
+            <span class="icon">⬇️</span> Download Link
+          </label>
+          <select id="download"></select>
+        </div>
+        <div class="mapping-item">
+          <label class="mapping-label">
+            <span class="icon">🔗</span> View Link
+          </label>
+          <select id="view"></select>
+        </div>
+        <div class="mapping-item" style="grid-column: 1 / -1;">
+          <label class="mapping-label">
+            <span class="icon">🖼️</span> Image URL
+          </label>
+          <select id="image"></select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress Section -->
+    <div class="progress-section" id="progressSection">
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+      <div class="progress-text">
+        <span id="progressCount">0 / 0</span>
+        <span id="progressPercent">0%</span>
+      </div>
+    </div>
+
+    <!-- Send Button -->
+    <button id="sendBtn" class="btn" disabled>
+      <span class="btn-icon">📨</span>
+      <span>Send to Telegram</span>
+    </button>
+
+    <!-- Status -->
+    <p id="status" class="status"></p>
   </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    Made with ❤️ for Telegram automation
+  </footer>
+</div>
+
+<!-- Toast for notifications -->
+<div class="toast" id="toast">
+  <span class="toast-icon"></span>
+  <span class="toast-message"></span>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
