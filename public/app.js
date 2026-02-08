@@ -1,9 +1,17 @@
 let columns = [];
-let filePath = "";
+let uploadedFilePath = "";
 
-document.getElementById("csv").addEventListener("change", async (e) => {
+const csvInput = document.getElementById("csv");
+const mappingDiv = document.getElementById("mapping");
+const sendBtn = document.getElementById("sendBtn");
+const status = document.getElementById("status");
+
+csvInput.addEventListener("change", async () => {
+  status.textContent = "Reading CSV...";
+  sendBtn.disabled = true;
+
   const formData = new FormData();
-  formData.append("csv", e.target.files[0]);
+  formData.append("csv", csvInput.files[0]);
 
   const res = await fetch("/upload", {
     method: "POST",
@@ -12,24 +20,35 @@ document.getElementById("csv").addEventListener("change", async (e) => {
 
   const data = await res.json();
   columns = data.columns;
-  filePath = e.target.files[0].name;
 
-  renderDropdowns();
+  renderMapping();
+  status.textContent = "Map columns below 👇";
 });
 
-function renderDropdowns() {
-  const fields = ["title", "description", "download", "view", "image"];
-  const div = document.getElementById("mapping");
+function renderMapping() {
+  const fields = [
+    ["title", "Title"],
+    ["description", "Description"],
+    ["download", "Download Link"],
+    ["view", "View Link"],
+    ["image", "Image URL"]
+  ];
 
-  div.innerHTML = fields.map(f => `
-    <label>${f}</label>
-    <select id="${f}">
+  mappingDiv.innerHTML = fields.map(([id, label]) => `
+    <label>${label}</label>
+    <select id="${id}">
       ${columns.map(c => `<option value="${c}">${c}</option>`).join("")}
-    </select><br/>
+    </select>
   `).join("");
+
+  mappingDiv.classList.remove("hidden");
+  sendBtn.disabled = false;
 }
 
-async function send() {
+sendBtn.addEventListener("click", async () => {
+  sendBtn.disabled = true;
+  status.textContent = "Sending posts to Telegram...";
+
   const mapping = {
     title: title.value,
     description: description.value,
@@ -41,8 +60,8 @@ async function send() {
   await fetch("/send", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mapping, filePath })
+    body: JSON.stringify({ mapping })
   });
 
-  alert("Sent to Telegram 🚀");
-}
+  status.textContent = "✅ Sent successfully!";
+});
