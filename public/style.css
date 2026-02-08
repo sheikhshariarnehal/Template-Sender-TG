@@ -1,0 +1,98 @@
+* {
+  box-sizing: border-box;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #0f172a;
+  color: #e5e7eb;
+}
+
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: #020617;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 20px 40px rgba(0,0,0,.4);
+}
+
+h1 {
+  margin: 0;
+  text-align: center;
+}
+
+.subtitle {
+  text-align: center;
+  color: #94a3b8;
+  margin-bottom: 20px;
+}
+
+.file-label {
+  display: block;
+  background: #020617;
+  border: 1px dashed #334155;
+  padding: 14px;
+  border-radius: 10px;
+  text-align: center;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+
+.file-label input {
+  display: none;
+}
+
+.mapping label {
+  font-size: 14px;
+  margin-top: 12px;
+  display: block;
+}
+
+.mapping select {
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: #020617;
+  color: #e5e7eb;
+  border: 1px solid #334155;
+}
+
+.send-btn {
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px;
+  border-radius: 10px;
+  border: none;
+  background: #22c55e;
+  color: #022c22;
+  font-weight: bold;
+  font-size: 16px;
+  cursor: pointer;
+  opacity: .6;
+}
+
+.send-btn:enabled {
+  opacity: 1;
+}
+
+.status {
+  text-align: center;
+  margin-top: 14px;
+  font-size: 14px;
+}
+
+.hidden {
+  display: none;
+}
